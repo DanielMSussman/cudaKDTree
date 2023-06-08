@@ -17,7 +17,7 @@
 #include "cukd/builder.h"
 // knn = "k-nearest-neighbor" query
 #include "cukd/knn.h"
-#include "cukd/knn2.h"
+#include "cukd/generalStructureKnn.h"
 #include "dDimensionalVectorTypes.h"
 #include <queue>
 #include <limits>
@@ -41,7 +41,7 @@ dVec *generatePoints(int N)
 }
 
 // ==================================================================
-__global__ void d_knn50(scalar *d_results,
+__global__ void d_knn25(scalar *d_results,
                        dVec *d_queries,
                        int numQueries,
                        dVec *d_nodes,
@@ -51,7 +51,7 @@ __global__ void d_knn50(scalar *d_results,
   int tid = threadIdx.x+blockIdx.x*blockDim.x;
   if (tid >= numQueries) return;
 
-  cukd::HeapCandidateList<50> result(maxRadius);
+  cukd::HeapCandidateList<25> result(maxRadius);
   scalar sqrDist
     = cukd::knn2
     <cukd::TrivialFloatPointTraits<dVec,DIMENSION>>
@@ -59,7 +59,7 @@ __global__ void d_knn50(scalar *d_results,
   d_results[tid] = sqrtf(sqrDist);
 }
 
-void knn50(scalar *d_results,
+void knn25(scalar *d_results,
           dVec *d_queries,
           int numQueries,
           dVec *d_nodes,
@@ -68,7 +68,7 @@ void knn50(scalar *d_results,
 {
   int bs = 128;
   int nb = cukd::common::divRoundUp(numQueries,bs);
-  d_knn50<<<nb,bs>>>(d_results,d_queries,numQueries,d_nodes,numNodes,maxRadius);
+  d_knn25<<<nb,bs>>>(d_results,d_queries,numQueries,d_nodes,numNodes,maxRadius);
 }
 
 inline void verifyKNN(int pointID, int k, float maxRadius,
@@ -158,20 +158,20 @@ int main(int ac, const char **av)
   scalar  *d_results;
   CUKD_CUDA_CALL(MallocManaged((void**)&d_results,nQueries*sizeof(scalar)));
 
-    std::cout << "running " << nRepeats << " sets of knn50 queries..." << std::endl;
+    std::cout << "running " << nRepeats << " sets of knn25 queries..." << std::endl;
     double t0 = getCurrentTime();
     for (int i=0;i<nRepeats;i++)
-      knn50(d_results,d_queries,nQueries,d_points,nPoints,maxQueryRadius);
+      knn25(d_results,d_queries,nQueries,d_points,nPoints,maxQueryRadius);
     CUKD_CUDA_SYNC_CHECK();
     double t1 = getCurrentTime();
-    std::cout << "done " << nRepeats << " iterations of knn50 query, took " << prettyDouble(t1-t0) << "s" << std::endl;
+    std::cout << "done " << nRepeats << " iterations of knn25 query, took " << prettyDouble(t1-t0) << "s" << std::endl;
     std::cout << " that's " << prettyDouble((t1-t0)/nRepeats) << "s per complete query set (avg)..." << std::endl;
     std::cout << " ... or " << prettyDouble(nQueries*nRepeats/(t1-t0)) << " queries/s" << std::endl;
 
     if (verify) {
       std::cout << "verifying result ..." << std::endl;
       for (int i=0;i<nQueries;i++)
-        verifyKNN(i,50,maxQueryRadius,d_points,nPoints,d_queries[i],d_results[i]);
+        verifyKNN(i,25,maxQueryRadius,d_points,nPoints,d_queries[i],d_results[i]);
       std::cout << "verification passed ... " << std::endl;
     }
 
